@@ -100,6 +100,12 @@
 
         function Hero(context, image, rect, ground)
         {
+            const HeroState = {
+                WALKING: 1,
+                JUMPING: 2,
+                FALLING: 3
+            };
+
             var sprite = new AnimatedSprite(characterSpriteSheet, [
                 {name: 'walk', x: 0, y: 0, w: 100, h: 100, time: .7, numFrames: 8},
                 {name: 'jump', x: 300, y: 100, w: 100, h: 100, time: .3, numFrames: 3},
@@ -112,27 +118,70 @@
             var JUMPSPEED = 400;
             var MAXJUMPTIME = .7;
             var MAXJUMPHEIGHT = rect.h * 1.1;
+            var jumpTime = 0;
+
+            var state = HeroState.FALLING;
 
             sprite.play("walk");
 
             Hero.prototype.update = function(t)
             {
                 sprite.update(t);
+                var deltaSeconds = t * 0.001;
+
+                if ( state === HeroState.JUMPING )
+                {
+                    jumpTime += deltaSeconds;
+                    
+                    if ( jumpTime < MAXJUMPTIME )
+                    {
+                        rect.y = Math.max(ground - MAXJUMPHEIGHT, rect.y - JUMPSPEED * deltaSeconds);
+                        return;
+                    }
+
+                    jumpTime = 0;
+                    state = HeroState.FALLING;
+                    return;
+                }
+
+                // FALLING
+                if ( state === HeroState.FALLING )
+                {
+                    if ( rect.y < ground )
+                    {
+                        rect.y = Math.min(ground, rect.y + FALLSPEED * deltaSeconds);
+                        return;
+                    }
+
+                    state = HeroState.WALKING;
+                    sprite.play("land", {
+                        loop: false,
+                        onfinish: function()
+                        {
+                            sprite.play("walk");
+                        }
+                    })
+                }
             }
 
             Hero.prototype.draw = function()
             {
                 frame = sprite.getFrame();
                 context.drawImage(frame.image, frame.x, frame.y, frame.w, frame.h, 
-                rect.x, rect.y, rect.w, rect.h);
+                    rect.x - rect.w / 2, rect.y - rect.h, rect.w, rect.h);
             }
 
             function jumpStart(event)
             {
-                if ( canJump )
+                if ( canJump && state === HeroState.WALKING )
                 {
                     canJump = false;
                     console.log('BEGIN JUMP');
+
+                    sprite.play("jump", { loop: false, onfinish: function() {
+                        state = HeroState.JUMPING;
+                        jumpTime = 0;
+                    }});
                 }
             }
 
@@ -140,6 +189,7 @@
             {
                 console.log('END JUMP');
                 canJump = true;
+                state = HeroState.FALLING;
             }
 
             document.addEventListener('keydown', jumpStart, false);
