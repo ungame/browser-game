@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Game</title>
+</head>
+<body>
+
+    <canvas id="gameCanvas" width="800" height="250"></canvas>
+    
+    <script>
+
+        function Timer()
+        {
+            this.deltaTime = 0;
+            var lastFrameTime = 0;
+            var thisFrameTime = 0;
+            var MAXDELTA = 1000 / 30;
+
+            Timer.prototype.tick = function()
+            {
+                this.deltaTime = Math.min((thisFrameTime - lastFrameTime), MAXDELTA);
+                lastFrameTime = thisFrameTime;
+                thisFrameTime = new Date().getTime(); // hora atual em milissegundos
+            }
+        }
+
+        function AnimatedSprite(image, animationList)
+        {
+            this.animation = null;
+
+            AnimatedSprite.prototype.play = function(name, options)
+            {
+
+                if ( !options )
+                    options = { loop: true, onfinish: function() {} };
+
+                for (var i = 0; i < animationList.length; i++ )
+                {
+                    if( animationList[i].name === name )
+                    {
+                        this.animation = animationList[i];
+
+                        this.animation.timePerFrame = this.animation.time / this.animation.numFrames;
+                        this.animation.frameTime = 0;
+                        this.animation.index = 0;
+
+                        this.animation.loop = options.loop;
+                        this.animation.onfinish = options.onfinish;
+
+                        this.animation.frame = {};
+                        this.animation.frame.image = image;
+                        this.animation.frame.x = this.animation.x;
+                        this.animation.frame.y = this.animation.y;
+                        this.animation.frame.w = this.animation.w;
+                        this.animation.frame.h = this.animation.h;
+                        return;
+                    }
+                }
+            }
+
+
+            AnimatedSprite.prototype.update = function(t)
+            {
+                if (this.animation === null) 
+                    return;
+
+                var deltaSeconds = t * 0.001;
+                this.animation.frameTime += deltaSeconds;
+
+                if ( this.animation.index === this.animation.numFrames - 1 && !this.animation.loop )
+                    return;
+
+                if ( this.animation.frameTime >= this.animation.timePerFrame )
+                {
+                    if ( this.animation.loop )
+                        this.animation.index = (this.animation.index + 1) % this.animation.numFrames;
+                    else
+                        this.animation.index = Math.min((this.animation.index + 1), this.animation.numFrames - 1);
+
+                    this.animation.frameTime = this.animation.frameTime - this.animation.timePerFrame;
+
+                    // atualizar o frame
+                    this.animation.frame.x = this.animation.x + this.animation.w * this.animation.index;
+
+                    if ( this.animation.index === this.animation.numFrames - 1 && this.animation.onfinish )
+                    {
+                        this.animation.onfinish();
+                    }
+                }
+            }
+
+            AnimatedSprite.prototype.getFrame = function() {
+                return this.animation.frame;
+            }
+        }
+
+
+        function Hero(context, image, rect, ground)
+        {
+            var sprite = new AnimatedSprite(characterSpriteSheet, [
+                {name: 'walk', x: 0, y: 0, w: 100, h: 100, time: .7, numFrames: 8},
+                {name: 'jump', x: 300, y: 100, w: 100, h: 100, time: .3, numFrames: 3},
+                {name: 'land', x: 700, y: 100, w: 100, h: 100, time: .3, numFrames: 3},
+            ]);
+
+            // controle de pulo
+            var canJump = true;
+            var FALLSPEED = 350;
+            var JUMPSPEED = 400;
+            var MAXJUMPTIME = .7;
+            var MAXJUMPHEIGHT = rect.h * 1.1;
+
+            sprite.play("walk");
+
+            Hero.prototype.update = function(t)
+            {
+                sprite.update(t);
+            }
+
+            Hero.prototype.draw = function()
+            {
+                frame = sprite.getFrame();
+                context.drawImage(frame.image, frame.x, frame.y, frame.w, frame.h, 
+                rect.x, rect.y, rect.w, rect.h);
+            }
+
+            function jumpStart(event)
+            {
+                if ( canJump )
+                {
+                    canJump = false;
+                    console.log('BEGIN JUMP');
+                }
+            }
+
+            function jumpEnd(event)
+            {
+                console.log('END JUMP');
+                canJump = true;
+            }
+
+            document.addEventListener('keydown', jumpStart, false);
+            document.addEventListener('touchstart', jumpStart, false);
+            document.addEventListener('keyup', jumpEnd, false);
+            document.addEventListener('touchend', jumpEnd, false);
+        };
+
+        function game()
+        {
+            canvas = document.getElementById("gameCanvas");
+            context = canvas.getContext('2d');
+
+            characterSpriteSheet = new Image();
+            characterSpriteSheet.src = './hero.png';
+
+            characterSpriteSheet.onload = function() {
+
+                var hero = new Hero(context, characterSpriteSheet, { x: 50, y: 50, w: 100, h: 100 }, canvas.height);
+
+                var timer = new Timer();
+
+                var frame = 0;
+
+                setInterval(function() 
+                {
+                    timer.tick();
+                    
+                    context.clearRect(0, 0, canvas.width, canvas.height);
+
+                    hero.update(timer.deltaTime);
+                    hero.draw();
+
+                }, 1000 / 30)
+
+            };
+        }
+
+        window.onload = game;
+    </script>
+</body>
+</html>
