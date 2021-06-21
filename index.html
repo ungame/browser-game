@@ -100,17 +100,21 @@
 
         function Hero(context, image, rect, ground)
         {
+            this.rect = rect;
+
             const HeroState = {
                 WALKING: 1,
                 JUMPING: 2,
                 FALLING: 3
             };
 
-            var sprite = new AnimatedSprite(characterSpriteSheet, [
+            var sprite = new AnimatedSprite(image, [
                 {name: 'walk', x: 0, y: 0, w: 100, h: 100, time: .7, numFrames: 8},
                 {name: 'jump', x: 300, y: 100, w: 100, h: 100, time: .3, numFrames: 3},
                 {name: 'land', x: 700, y: 100, w: 100, h: 100, time: .3, numFrames: 3},
             ]);
+
+            var boundsSize = this.rect.w * 0.3;
 
             // controle de pulo
             var canJump = true;
@@ -171,6 +175,17 @@
                     rect.x - rect.w / 2, rect.y - rect.h, rect.w, rect.h);
             }
 
+            Hero.prototype.collide = function(other)
+            {
+                if ( this.rect.x < other.x + other.w && 
+                    this.rect.x + boundsSize > other.x && 
+                    this.rect.y < other.y + other.h &&
+                    this.rect.y + boundsSize > other.y)
+                    return true;
+
+                return false;
+            }
+
             function jumpStart(event)
             {
                 if ( canJump && state === HeroState.WALKING )
@@ -198,30 +213,117 @@
             document.addEventListener('touchend', jumpEnd, false);
         };
 
+        function getRandomInt(min, max) 
+        {
+            return Math.floor(Math.random() * ((max + 1) - min)) + min;
+        }
+
         function game()
         {
             canvas = document.getElementById("gameCanvas");
             context = canvas.getContext('2d');
+            context.font = '40px monospace';
 
-            characterSpriteSheet = new Image();
+            const characterSpriteSheet = new Image();
             characterSpriteSheet.src = './hero.png';
 
             characterSpriteSheet.onload = function() {
 
-                var hero = new Hero(context, characterSpriteSheet, { x: 50, y: 50, w: 100, h: 100 }, canvas.height);
+                var hero = new Hero(context, characterSpriteSheet, { x: canvas.width * 0.25, y: 50, w: 100, h: 100 }, canvas.height);
+
+                var obstaclePool = [
+                    { x: -1, y: canvas.height, w: 30, h: 0, active: false },
+                    { x: -1, y: canvas.height, w: 30, h: 0, active: false },
+                    { x: -1, y: canvas.height, w: 30, h: 0, active: false },
+                    { x: -1, y: canvas.height, w: 30, h: 0, active: false },
+                    { x: -1, y: canvas.height, w: 30, h: 0, active: false },
+                ];
+
+                var inactiveObstableCount = obstaclePool.length;
 
                 var timer = new Timer();
 
+                var minObstacleH = 30;
+                var maxObstacleH = 80;
+                var gameSpeed = 200;
+                var score = 0;
                 var frame = 0;
-
-                setInterval(function() 
+                var gameOver = false;
+                var intervalID = setInterval(function() 
                 {
                     timer.tick();
-                    
                     context.clearRect(0, 0, canvas.width, canvas.height);
 
+                    // Renderiza o score
+                    context.fillStyle = 'red';
+                    context.fillText(score, 10, 100);
+
+                    // Renderiza o chão
+                    context.beginPath();
+                    context.strokeStyle = "black";
+                    context.moveTo(0, canvas.height - 1);
+                    context.lineTo(canvas.width, canvas.height - 1);
+                    context.stroke();
+
+                    // Randomiza obstaculos
+                    if ( inactiveObstableCount === obstaclePool.length )
+                    {
+                        lastX = canvas.width;
+
+                        for(var i = 0; i < obstaclePool.length; i++)
+                        {
+                            obstacle = obstaclePool[i];
+                            obstacle.x = lastX + getRandomInt(hero.rect.w * 2, canvas.width * 0.8);
+                            obstacle.h = getRandomInt( minObstacleH, maxObstacleH );
+                            obstacle.active = true;
+                            lastX = obstacle.x; 
+                            inactiveObstableCount--;
+                        }
+
+                        gameSpeed += 3;
+                        hero.rect.x = Math.min( canvas.width * 0.7, hero.rect.x + 10 );   
+                    }
+
+                    // atualiza o heroi
                     hero.update(timer.deltaTime);
+                    
+                    for(var i = 0; i < obstaclePool.length; i++)
+                    {
+                        obstacle = obstaclePool[i];
+
+                        if ( !obstacle.active )
+                            continue;
+
+
+                        obstacle.x -= gameSpeed * timer.deltaTime * 0.001;
+
+                        if ( obstacle.x - obstacle.w / 2 < 0 )
+                        {
+                            obstacle.active = false;
+                            inactiveObstableCount++;
+                            score++;
+                        }
+
+                        context.fillStyle = 'rgb(148, 133, 117)';
+                        context.fillRect(obstacle.x - obstacle.w / 2, obstacle.y - obstacle.h,
+                            obstacle.w, obstacle.h);
+
+                        if ( hero.collide(obstacle) )
+                        {
+                            gameOver = true;
+                            break;
+                        }
+                    }
+
                     hero.draw();
+
+                    if ( gameOver )
+                    {
+                        clearInterval(intervalID);
+                        context.fillStyle = "red";
+                        context.fillText("Game Over", canvas.width / 2 - 100, canvas.height / 2, 200);
+                    }
+   
 
                 }, 1000 / 30)
 
